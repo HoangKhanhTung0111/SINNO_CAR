@@ -10,13 +10,16 @@ WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
 // --- Wi-Fi ---
-const char* WIFI_SSID     = ".";
-const char* WIFI_PASSWORD = "Hoangtung111";
+const char* WIFI_SSID     = "Hust_B1_Staff";
+const char* WIFI_PASSWORD = "";
 
 // --- MQTT ---
-const char* MQTT_SERVER   = "172.20.10.4";  // IP máy chạy Docker EMQX
+const char* MQTT_SERVER   = "172.11.108.190";  // IP máy chạy Docker EMQX
 const char* MQTT_CLIENT_ID = "ESP32_Gesture_Car";
 const char* MQTT_TOPIC_SUB = "/aiot/gesture";
+
+unsigned long lastCommandMillis = 0;
+bool motorsStopped = true;  
 
 // --- Hàm xử lý khi nhận MQTT message ---
 // esp32_gesture_car.ino (đoạn callback)
@@ -31,20 +34,32 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
     Serial.print("] ");
     Serial.println(message);
 
+    // Cập nhật thời gian nhận lệnh cuối cùng
+    lastCommandMillis = millis();
+
     if (message == "FORWARD") {
         Serial.println("[ACTION] FORWARD");
         motor_forward();
+        motorsStopped = false;
     } else if (message == "LEFT") {
         Serial.println("[ACTION] LEFT");
         motor_left();
+        motorsStopped = false;
     } else if (message == "RIGHT") {
         Serial.println("[ACTION] RIGHT");
         motor_right();
+        motorsStopped = false;
+    } else if (message == "STOP") {
+        Serial.println("[ACTION] STOP");
+        motor_stop();
+        motorsStopped = true;
     } else {
         Serial.println("[ACTION] UNKNOWN COMMAND → motor_stop()");
         motor_stop();
+        motorsStopped = true;
     }
 }
+
 
 // --- Kết nối Wi-Fi ---
 void setup_wifi() {
@@ -84,8 +99,14 @@ void reconnect_mqtt() {
 
 void setup() {
     Serial.begin(115200);
+    delay(1000);
+    Serial.println("\n[SETUP] ESP32 Gesture Car starting...");
 
     motor_driver_init();
+    motor_stop();
+    motorsStopped = true;
+    lastCommandMillis = millis();
+
     setup_wifi();
 
     mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
@@ -94,12 +115,22 @@ void setup() {
     reconnect_mqtt();
 }
 
+
 void loop() {
     if (!mqttClient.connected()) {
         reconnect_mqtt();
     }
     mqttClient.loop();
 
-    // Nếu muốn, có thể thêm logic timeout ở đây:
-    // VD: nếu 3 giây không có lệnh mới -> motor_stop().
+    // ===== Timeout 3 giây không có lệnh thì dừng motor =====
+    unsigned long now = millis();
+    const unsigned long TIMEOUT_MS = 3000;  // 3 giây
+
+    if (!motorsStopped && (now - lastCommandMillis > TIMEOUT_MS)) {
+        Serial.println("[TIMEOUT] No command for 3s → STOP motors");
+        motor_stop();
+        motorsStopped = true;
+    }
+
+    // ... nếu bạn không có logic gì thêm thì để loop trống ở đây
 }
