@@ -13,6 +13,9 @@ GESTURE_TO_COMMAND = {
     "Pointing_Up": "FORWARD",  # đi thẳng
 }
 
+# Lệnh STOP đặc biệt
+STOP_COMMAND = "STOP"
+
 # Thời gian tối thiểu giữa 2 lần gửi cùng một command (giảm spam)
 MIN_COMMAND_INTERVAL_SEC = 0.7
 
